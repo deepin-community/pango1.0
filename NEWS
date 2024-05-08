@@ -1,4 +1,51 @@
-Overview of changes in 1.50.12, xx-xx-xxxx
+Overview of changes in 1.52.2, 31-03-2024
+=========================================
+- coretext: Implement reload_font
+- coretext: Use Menlo instead of Courier for monospace
+- win32: Avoid a double free
+- Update to Unicode 15.1
+- Simplify hexbox drawing
+
+Overview of changes in 1.52.1, 05-03-2024
+=========================================
+- Fix hexbox drawing
+
+Overview of changes in 1.52.0, 25-02-2024
+=========================================
+- Add pango_font_map_reload_font
+- Improve formatting of font sizes
+
+Overview of changes in 1.51.2, 10-02-2024
+=========================================
+- Build improvements on Windows
+- Use single fontconfig thread
+- Fix problems with spaces at line ends
+- Allow custom fonts on Windows
+- pango-viewer: Fix hint-metrics options
+- Pangofont: Add properties
+
+Overview of changes in 1.51.0, 11-08-2023
+=========================================
+- itemize: Improve script itemization
+- build: Check for cairo DWrite dependency
+- win32: Fix various issues and crashes
+- layout: Add a missing switch case
+
+Overview of changes in 1.50.14, 02-03-2023
+==========================================
+- Fix underline thickness in scaled contexts
+
+Overview of changes in 1.50.13, 20-02-2023
+==========================================
+- win32: Add back fallback for empty fontsets
+- win32: Improve DirectWrite support
+- Fix word segmentation for Japanese
+- Don't set backspace-deletes-char for math symbols
+- coretext: Fix a crash
+- cairo: Apply metrics hinting to underlines too
+- Treat COLRv1 fonts as color fonts
+
+Overview of changes in 1.50.12, 18-11-2022
 ==========================================
 - Fix weight conversion on MacOS
 - Update to Unicode 15

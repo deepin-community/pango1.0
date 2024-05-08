@@ -29,6 +29,10 @@
 #include <glib.h>
 #include <hb.h>
 
+#ifdef USE_HB_GDI
+#include <hb-gdi.h>
+#endif
+
 #include "pango-impl-utils.h"
 #include "pangowin32.h"
 #include "pangowin32-private.h"
@@ -126,14 +130,21 @@ _pango_win32_font_init (PangoWin32Font *win32font)
   win32font->glyph_info = g_hash_table_new_full (NULL, NULL, NULL, g_free);
 }
 
-static GPrivate display_dc_key = G_PRIVATE_INIT ((GDestroyNotify) DeleteDC);
+static void
+_delete_dc (HDC dc)
+{
+  /* Don't pass DeleteDC func pointer to the GDestroyNotify.
+   * 32bit build requires matching calling convention (__cdecl vs __stdcall) */
+  DeleteDC (dc);
+}
+
+static GPrivate display_dc_key = G_PRIVATE_INIT ((GDestroyNotify) _delete_dc);
 static GPrivate dwrite_items = G_PRIVATE_INIT ((GDestroyNotify) pango_win32_dwrite_items_destroy);
 
 HDC
 _pango_win32_get_display_dc (void)
 {
   HDC hdc = g_private_get (&display_dc_key);
-  PangoWin32DWriteItems *items;
 
   if (hdc == NULL)
     {
@@ -154,12 +165,8 @@ _pango_win32_get_display_dc (void)
 #endif
     }
 
-  items = g_private_get (&dwrite_items);
-  if (items == NULL)
-    {
-      items = pango_win32_init_direct_write ();
-      g_private_set (&dwrite_items, items);
-    }
+  /* ensure DirectWrite is initialized */
+  pango_win32_get_direct_write_items ();
 
   return hdc;
 }
@@ -167,7 +174,15 @@ _pango_win32_get_display_dc (void)
 PangoWin32DWriteItems *
 pango_win32_get_direct_write_items (void)
 {
-  return g_private_get (&dwrite_items);
+  PangoWin32DWriteItems *items = g_private_get (&dwrite_items);
+
+  if (items == NULL)
+    {
+      items = pango_win32_init_direct_write ();
+      g_private_set (&dwrite_items, items);
+    }
+
+  return items;
 }
 
 /**
@@ -1239,7 +1254,12 @@ static inline guint32 hb_gdi_uint32_swap (const guint32 v)
 /*
  * Adapted from https://www.mail-archive.com/harfbuzz@lists.freedesktop.org/msg06538.html
  * by Konstantin Ritt.
+ *
+ * HarfBuzz added GDI support after this code was done, and may not have been enabled
+ * in the build, so this now becomes the fallback method used to create a hb_face_t if
+ * HarfBuzz was neither built with DirectWrite nor GDI support.
  */
+#if !defined (USE_HB_DWRITE) && !defined (USE_HB_GDI)
 static hb_blob_t *
 hfont_reference_table (hb_face_t *face, hb_tag_t tag, void *user_data)
 {
@@ -1281,6 +1301,7 @@ hfont_reference_table (hb_face_t *face, hb_tag_t tag, void *user_data)
   SelectObject (hdc, old_hfont);
   return hb_blob_create (buf, size, HB_MEMORY_MODE_READONLY, buf, g_free);
 }
+#endif
 
 static hb_font_t *
 pango_win32_font_create_hb_font (PangoFont *font)
@@ -1289,13 +1310,24 @@ pango_win32_font_create_hb_font (PangoFont *font)
   HFONT hfont;
   hb_face_t *face = NULL;
   hb_font_t *hb_font = NULL;
+  static hb_user_data_key_t key;
 
   g_return_val_if_fail (font != NULL, NULL);
 
+#ifdef USE_HB_DWRITE
+  face = pango_win32_font_create_hb_face_dwrite (win32font);
+#else
   hfont = _pango_win32_font_get_hfont (font);
 
   /* We are *not* allowed to destroy the HFONT here ! */
+#ifdef USE_HB_GDI
+  face = hb_gdi_face_create (hfont);
+
+  hb_face_set_user_data (face, &key, hfont, g_free, TRUE);
+#else
   face = hb_face_create_for_tables (hfont_reference_table, (void *)hfont, NULL);
+#endif
+#endif
 
   hb_font = hb_font_create (face);
   hb_font_set_scale (hb_font, win32font->size, win32font->size);

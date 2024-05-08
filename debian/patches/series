@@ -1,2 +1,3 @@
-debian/0001-fix-Remove-the-broken-unit-tests.patch
+debian/tests-Skip-a-test-that-fails-with-a-small-variation-on-i3.patch
+debian/tests-Treat-some-more-layout-tests-as-flaky.patch
 debian/Work-around-1014417-in-Meson.patch
