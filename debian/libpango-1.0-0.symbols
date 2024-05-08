@@ -210,6 +210,7 @@ libpango-1.0.so.0 libpango-1.0-0 #MINVER#
  pango_font_map_list_families@Base 1.14.0
  pango_font_map_load_font@Base 1.14.0
  pango_font_map_load_fontset@Base 1.14.0
+ pango_font_map_reload_font@Base 1.52.0
  pango_font_mask_get_type@Base 1.14.0
  pango_font_metrics_get_approximate_char_width@Base 1.14.0
  pango_font_metrics_get_approximate_digit_width@Base 1.14.0

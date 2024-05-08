@@ -1363,7 +1363,7 @@ pango_layout_set_markup (PangoLayout *layout,
  * @length: length of marked-up text in bytes, or -1 if @markup is
  *   `NUL`-terminated
  * @accel_marker: marker for accelerators in the text
- * @accel_char: (out caller-allocates) (optional): return location
+ * @accel_char: (out) (optional): return location
  *   for first located accelerator
  *
  * Sets the layout text and attribute list from marked-up text.
@@ -4102,7 +4102,10 @@ process_item (PangoLayout     *layout,
           processing_new_item = FALSE;
         }
 
-      extra_width = find_break_extra_width (layout, state, item->num_chars);
+      if (!is_last_item)
+        extra_width = find_break_extra_width (layout, state, item->num_chars);
+      else
+        extra_width = 0;
     }
   else
     extra_width = 0;
@@ -4162,7 +4165,10 @@ retry_break:
 
   for (num_chars = 0, width = 0; num_chars < (no_break_at_end ? item->num_chars : (item->num_chars + 1)); num_chars++)
     {
-      extra_width = find_break_extra_width (layout, state, num_chars);
+      if (!is_last_item || num_chars != item->num_chars)
+        extra_width = find_break_extra_width (layout, state, num_chars);
+      else
+        extra_width = 0;
 
       /* We don't want to walk the entire item if we can help it, but
        * we need to keep going at least until we've found a breakpoint
@@ -6899,7 +6905,7 @@ pango_layout_get_item_properties (PangoItem      *item,
       switch ((int) attr->klass->type)
         {
         case PANGO_ATTR_UNDERLINE:
-          switch (((PangoAttrInt *)attr)->value)
+          switch ((PangoUnderline)(((PangoAttrInt *)attr)->value))
             {
             case PANGO_UNDERLINE_NONE:
               break;
@@ -6925,8 +6931,10 @@ pango_layout_get_item_properties (PangoItem      *item,
           break;
 
         case PANGO_ATTR_OVERLINE:
-          switch (((PangoAttrInt *)attr)->value)
+          switch ((PangoOverline)(((PangoAttrInt *)attr)->value))
             {
+            case PANGO_OVERLINE_NONE:
+              break;
             case PANGO_OVERLINE_SINGLE:
               properties->oline_single = TRUE;
               break;

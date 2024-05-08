@@ -248,9 +248,6 @@ _pango_cairo_font_get_metrics (PangoFont     *font,
       PangoRectangle extents;
       PangoFontDescription *desc;
       cairo_scaled_font_t *scaled_font;
-      cairo_matrix_t cairo_matrix;
-      PangoMatrix pango_matrix;
-      PangoMatrix identity = PANGO_MATRIX_INIT;
       glong sample_str_width;
 
       int height, shift;
@@ -278,32 +275,6 @@ _pango_cairo_font_get_metrics (PangoFont     *font,
       cairo_font_options_destroy (font_options);
 
       info->metrics = (* PANGO_CAIRO_FONT_GET_IFACE (font)->create_base_metrics_for_context) (cfont, context);
-
-      /* We now need to adjust the base metrics for ctm */
-      cairo_scaled_font_get_ctm (scaled_font, &cairo_matrix);
-      pango_matrix.xx = cairo_matrix.xx;
-      pango_matrix.yx = cairo_matrix.yx;
-      pango_matrix.xy = cairo_matrix.xy;
-      pango_matrix.yy = cairo_matrix.yy;
-      pango_matrix.x0 = 0;
-      pango_matrix.y0 = 0;
-      if (G_UNLIKELY (0 != memcmp (&identity, &pango_matrix, 4 * sizeof (double))))
-        {
-	  double xscale = pango_matrix_get_font_scale_factor (&pango_matrix);
-	  if (xscale) xscale = 1 / xscale;
-
-	  info->metrics->ascent *= xscale;
-	  info->metrics->descent *= xscale;
-	  info->metrics->height *= xscale;
-	  info->metrics->underline_position *= xscale;
-	  info->metrics->underline_thickness *= xscale;
-	  info->metrics->strikethrough_position *= xscale;
-	  info->metrics->strikethrough_thickness *= xscale;
-	}
-
-      /* Set the matrix on the context so we don't have to adjust the derived
-       * metrics. */
-      pango_context_set_matrix (context, &pango_matrix);
 
       /* Ugly. We need to prevent recursion when we call into
        * PangoLayout to determine approximate char width.
@@ -479,13 +450,7 @@ _pango_cairo_font_private_get_hex_box_info (PangoCairoFontPrivate *cf_priv)
     mini_size = size / 2.2;
     if (is_hinted)
       {
-	mini_size = HINT_Y (mini_size);
-
-	if (mini_size < 6.0)
-	  {
-	    rows = 1;
-	    mini_size = MIN (MAX (size - 1, 0), 6.0);
-	  }
+        mini_size = HINT_Y (mini_size);
       }
 
     pango_font_description_set_absolute_size (desc, pango_units_from_double (mini_size));
@@ -505,7 +470,6 @@ _pango_cairo_font_private_get_hex_box_info (PangoCairoFontPrivate *cf_priv)
 
   pango_font_description_free (desc);
   cairo_font_options_destroy (font_options);
-
 
   scaled_mini_font = pango_cairo_font_get_scaled_font ((PangoCairoFont *) mini_font);
   if (G_UNLIKELY (scaled_mini_font == NULL || cairo_scaled_font_status (scaled_mini_font) != CAIRO_STATUS_SUCCESS))
@@ -737,7 +701,7 @@ _pango_cairo_font_private_get_glyph_extents_missing (PangoCairoFontPrivate *cf_p
     {
       ink_rect->x = PANGO_SCALE * hbi->pad_x;
       ink_rect->y = PANGO_SCALE * (hbi->box_descent - hbi->box_height);
-      ink_rect->width = PANGO_SCALE * (3 * hbi->pad_x + cols * (hbi->digit_width + hbi->pad_x));
+      ink_rect->width = PANGO_SCALE * (4 * hbi->pad_x + cols * (hbi->digit_width + hbi->pad_x));
       ink_rect->height = PANGO_SCALE * hbi->box_height;
     }
 

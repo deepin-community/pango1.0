@@ -23,6 +23,7 @@
 #include <stdlib.h>
 #include <math.h>
 #include <string.h>
+#include <locale.h>
 
 #include <gio/gio.h>
 
@@ -1419,6 +1420,54 @@ append_field (GString *str, const char *what, const FieldMap *map, int n_element
   g_string_append_printf (str, "%s=%d", what, val);
 }
 
+static void
+g_ascii_format_nearest_multiple (char   *buf,
+                                 gsize   len,
+                                 double  value,
+                                 double  factor)
+{
+  double eps, lo, hi;
+  char buf1[24];
+  char buf2[24];
+  int i, j;
+  const char *dot;
+
+  value = round (value / factor) * factor;
+  eps = 0.5 * factor;
+  lo = value - eps;
+  hi = value + eps;
+
+  if (floor (lo) != floor (hi))
+    {
+      g_snprintf (buf, len, "%d", (int) round (value));
+      return;
+    }
+
+  g_ascii_formatd (buf1, sizeof (buf1), "%.8f", lo);
+  g_ascii_formatd (buf2, sizeof (buf2), "%.8f", hi);
+
+  if (strlen (buf1) != strlen (buf2))
+    {
+      g_print ("%f at %f: %s / %s\n", value, factor, buf1, buf2);
+    }
+  g_assert (strlen (buf1) == strlen (buf2));
+
+  for (i = 0; buf1[i]; i++)
+    {
+      if (buf1[i] != buf2[i])
+        break;
+    }
+
+  dot = strchr (buf1, '.');
+
+  j = dot - buf1;
+
+  g_assert (j < i);
+
+  g_snprintf (buf1, sizeof (buf1), "%%.%df", i - j);
+  g_ascii_formatd (buf, len, buf1, value);
+}
+
 /**
  * pango_font_description_to_string:
  * @desc: a `PangoFontDescription`
@@ -1486,7 +1535,9 @@ pango_font_description_to_string (const PangoFontDescription *desc)
       if (result->len > 0 || result->str[result->len -1] != ' ')
         g_string_append_c (result, ' ');
 
-      g_ascii_dtostr (buf, sizeof (buf), (double)desc->size / PANGO_SCALE);
+      g_ascii_format_nearest_multiple (buf, sizeof (buf),
+                                       desc->size / (double) PANGO_SCALE,
+                                       1 / (double) PANGO_SCALE);
       g_string_append (result, buf);
 
       if (desc->size_is_absolute)
@@ -2388,6 +2439,9 @@ pango_font_family_default_list_faces (PangoFontFamily   *family,
 enum {
   PROP_ITEM_TYPE = 1,
   PROP_N_ITEMS,
+  PROP_NAME,
+  PROP_IS_MONOSPACE,
+  PROP_IS_VARIABLE,
   N_PROPERTIES
 };
 
@@ -2402,11 +2456,23 @@ pango_font_family_get_property (GObject    *object,
   switch (property_id)
     {
     case PROP_ITEM_TYPE:
-      g_value_set_gtype (value, PANGO_TYPE_FONT);
+      g_value_set_gtype (value, PANGO_TYPE_FONT_FACE);
       break;
 
     case PROP_N_ITEMS:
       g_value_set_uint (value, pango_font_family_get_n_items (G_LIST_MODEL (object)));
+      break;
+
+    case PROP_NAME:
+      g_value_set_string (value, pango_font_family_get_name (PANGO_FONT_FAMILY (object)));
+      break;
+
+    case PROP_IS_MONOSPACE:
+      g_value_set_boolean (value, pango_font_family_is_monospace (PANGO_FONT_FAMILY (object)));
+      break;
+
+    case PROP_IS_VARIABLE:
+      g_value_set_boolean (value, pango_font_family_is_variable (PANGO_FONT_FAMILY (object)));
       break;
 
     default:
@@ -2425,6 +2491,39 @@ pango_font_family_class_init (PangoFontFamilyClass *class)
   class->is_variable = pango_font_family_default_is_variable;
   class->get_face = pango_font_family_real_get_face;
   class->list_faces = pango_font_family_default_list_faces;
+
+  /**
+   * PangoFontFamily:name: (attributes org.gtk.Property.get=pango_font_family_get_name)
+   *
+   * The name of the family
+   * 
+   * Since: 1.52
+   */
+  font_family_properties[PROP_NAME] =
+    g_param_spec_string ("name", "", "", NULL,
+                         G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  /**
+   * PangoFontFamily:is-monospace: (attributes org.gtk.Property.get=pango_font_family_is_monospace)
+   *
+   * Is this a monospace font
+   * 
+   * Since: 1.52
+   */
+  font_family_properties[PROP_IS_MONOSPACE] =
+    g_param_spec_boolean ("is-monospace", "", "", FALSE,
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
+
+  /**
+   * PangoFontFamily:is-variable: (attributes org.gtk.Property.get=pango_font_family_is_variable)
+   *
+   * Is this a variable font
+   * 
+   * Since: 1.52
+   */
+  font_family_properties[PROP_IS_VARIABLE] =
+    g_param_spec_boolean ("is-variable", "", "", FALSE,
+                          G_PARAM_READABLE | G_PARAM_STATIC_STRINGS);
 
   /**
    * PangoFontFamily:item-type:
@@ -2778,7 +2877,7 @@ pango_font_has_char (PangoFont *font,
  * pango_font_get_features:
  * @font: a `PangoFont`
  * @features: (out caller-allocates) (array length=len): Array to features in
- * @len: the length of @features
+ * @len: (in): the length of @features
  * @num_features: (inout): the number of used items in @features
  *
  * Obtain the OpenType features that are provided by the font.
