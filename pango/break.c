@@ -165,14 +165,18 @@ default_break (const char    *text,
    */
 
   const gchar *next;
+  const gchar *next_next;
   gint i;
 
   gunichar prev_wc;
+  gunichar prev_prev_wc;
   gunichar next_wc;
+  gunichar next_next_wc;
 
   JamoType prev_jamo;
 
   GUnicodeBreakType next_break_type;
+  GUnicodeBreakType next_next_break_type;
   GUnicodeBreakType prev_break_type;
   GUnicodeBreakType prev_prev_break_type;
 
@@ -257,10 +261,12 @@ default_break (const char    *text,
     LB_RI_Odd,
     LB_RI_Even,
     LB_Dotted_Circle,
+    LB_Hyphen,
   } LineBreakType;
   LineBreakType prev_prev_LB_type G_GNUC_UNUSED = LB_Other;
   LineBreakType prev_LB_type = LB_Other;
   gboolean met_LB15a = FALSE;
+  gint prev_LB_i = -1;
 
   WordType current_word_type = WordNone;
   gunichar last_word_letter = 0;
@@ -278,10 +284,12 @@ default_break (const char    *text,
   g_return_if_fail (attrs != NULL);
 
   next = text;
+  next_next = NULL;
 
   prev_break_type = G_UNICODE_BREAK_UNKNOWN;
   prev_prev_break_type = G_UNICODE_BREAK_UNKNOWN;
   prev_wc = 0;
+  prev_prev_wc = 0;
   prev_script = PANGO_SCRIPT_COMMON;
   prev_jamo = NO_JAMO;
   prev_space_or_hyphen = FALSE;
@@ -341,13 +349,25 @@ default_break (const char    *text,
 	       * of @text.
 	       */
 	      next_wc = PARAGRAPH_SEPARATOR;
+	      next_next_wc = PARAGRAPH_SEPARATOR;
 	      almost_done = TRUE;
 	    }
 	  else
-	    next_wc = g_utf8_get_char (next);
+	    {
+	      next_wc = g_utf8_get_char (next);
+	      next_next = g_utf8_next_char (next);
+
+	      if ((length >= 0 && next_next >= text + length) || *next_next == '\0')
+	        next_next_wc = PARAGRAPH_SEPARATOR;
+	      else
+	        next_next_wc = g_utf8_get_char (next_next);
+	    }
 
 	  next_break_type = g_unichar_break_type (next_wc);
 	  next_break_type = BREAK_TYPE_SAFE (next_break_type);
+
+	  next_next_break_type = g_unichar_break_type (next_next_wc);
+	  next_next_break_type = BREAK_TYPE_SAFE (next_next_break_type);
 	}
 
       type = g_unichar_type (wc);
@@ -893,11 +913,18 @@ default_break (const char    *text,
 
 		case G_UNICODE_DASH_PUNCTUATION:
 		  if (wc == 0x002D ||
+		      wc == 0x003B ||
+		      wc == 0x037E ||
 		      (wc >= 0x2013 && wc <= 0x2014) ||
+		      wc == 0xFE14 ||
 		      (wc >= 0xFE31 && wc <= 0xFE32) ||
+		      wc == 0xFE54 ||
 		      wc == 0xFE58 ||
 		      wc == 0xFE63 ||
-		      wc == 0xFF0D)
+		      wc == 0xFF0D ||
+		      wc == 0xFF1A ||
+		      wc == 0xFF1B ||
+		      wc == 0xFF64)
 		    SB_type = SB_SContinue;
 		  break;
 
@@ -1106,6 +1133,7 @@ default_break (const char    *text,
       if (attrs[i].is_cursor_position ||
 	  break_type == G_UNICODE_BREAK_COMBINING_MARK ||
 	  break_type == G_UNICODE_BREAK_ZERO_WIDTH_JOINER ||
+	  break_type == G_UNICODE_BREAK_NON_BREAKING_GLUE ||
 	  break_type == G_UNICODE_BREAK_HANGUL_L_JAMO ||
 	  break_type == G_UNICODE_BREAK_HANGUL_V_JAMO ||
 	  break_type == G_UNICODE_BREAK_HANGUL_T_JAMO ||
@@ -1123,6 +1151,10 @@ default_break (const char    *text,
 
 	  /* Find the LineBreakType of wc */
 	  LB_type = LB_Other;
+
+	  /* Rule LB20a */
+	  if (wc == 0x2010)
+	    LB_type = LB_Hyphen;
 
 	  /* Rule LB28a */
 	  if (wc == 0x25CC)
@@ -1168,6 +1200,20 @@ default_break (const char    *text,
 	  /* add the line break rules in reverse order to override
 	     the lower priority rules. */
 
+	  /* Rule LB30b */
+	  if (prev_break_type == G_UNICODE_BREAK_EMOJI_BASE &&
+	      break_type == G_UNICODE_BREAK_EMOJI_MODIFIER)
+	    break_op = BREAK_PROHIBITED;
+
+	  if ((_pango_Is_Emoji_Extended_Pictographic (prev_wc) &&
+	       g_unichar_type (prev_wc) == G_UNICODE_UNASSIGNED) &&
+	      break_type == G_UNICODE_BREAK_EMOJI_MODIFIER)
+	    break_op = BREAK_PROHIBITED;
+
+	  /* Rule LB30a */
+	  if (prev_LB_type == LB_RI_Odd && LB_type == LB_RI_Even)
+	    break_op = BREAK_PROHIBITED;
+
 	  /* Rule LB30 */
 	  if ((prev_break_type == G_UNICODE_BREAK_ALPHABETIC ||
 	       prev_break_type == G_UNICODE_BREAK_HEBREW_LETTER ||
@@ -1181,20 +1227,6 @@ default_break (const char    *text,
 	      (break_type == G_UNICODE_BREAK_ALPHABETIC ||
 	       break_type == G_UNICODE_BREAK_HEBREW_LETTER ||
 	       break_type == G_UNICODE_BREAK_NUMERIC))
-	    break_op = BREAK_PROHIBITED;
-
-	  /* Rule LB30a */
-	  if (prev_LB_type == LB_RI_Odd && LB_type == LB_RI_Even)
-	    break_op = BREAK_PROHIBITED;
-
-	  /* Rule LB30b */
-	  if (prev_break_type == G_UNICODE_BREAK_EMOJI_BASE &&
-	      break_type == G_UNICODE_BREAK_EMOJI_MODIFIER)
-	    break_op = BREAK_PROHIBITED;
-
-	  if ((_pango_Is_Emoji_Extended_Pictographic (prev_wc) &&
-	       g_unichar_type (prev_wc) == G_UNICODE_UNASSIGNED) &&
-	      break_type == G_UNICODE_BREAK_EMOJI_MODIFIER)
 	    break_op = BREAK_PROHIBITED;
 
 	  /* Rule LB29 */
@@ -1279,43 +1311,76 @@ default_break (const char    *text,
 	      break_type == G_UNICODE_BREAK_HANGUL_T_JAMO)
 	    break_op = BREAK_PROHIBITED;
 
-	  /* Rule LB25 with Example 7 of Customization */
-	  if ((prev_break_type == G_UNICODE_BREAK_PREFIX ||
-	       prev_break_type == G_UNICODE_BREAK_POSTFIX) &&
-	      break_type == G_UNICODE_BREAK_NUMERIC)
-	    break_op = BREAK_PROHIBITED;
+	  /* Rule LB25 */
+	  if (prev_prev_LB_type == LB_Numeric &&
+	      prev_break_type == G_UNICODE_BREAK_CLOSE_PUNCTUATION &&
+	      break_type == G_UNICODE_BREAK_POSTFIX)
+	    break_op = BREAK_PROHIBITED; /* NU ( SY | IS )* CL × PO */
 
-	  if ((prev_break_type == G_UNICODE_BREAK_PREFIX ||
-	       prev_break_type == G_UNICODE_BREAK_POSTFIX) &&
-	      (break_type == G_UNICODE_BREAK_OPEN_PUNCTUATION ||
-	       break_type == G_UNICODE_BREAK_HYPHEN) &&
-	      next_break_type == G_UNICODE_BREAK_NUMERIC)
-	    break_op = BREAK_PROHIBITED;
+	  if (prev_prev_LB_type == LB_Numeric &&
+	      prev_break_type == G_UNICODE_BREAK_CLOSE_PARANTHESIS &&
+	      break_type == G_UNICODE_BREAK_POSTFIX)
+	    break_op = BREAK_PROHIBITED; /* NU ( SY | IS )* CP × PO */
 
-	  if ((prev_break_type == G_UNICODE_BREAK_OPEN_PUNCTUATION ||
-	       prev_break_type == G_UNICODE_BREAK_HYPHEN) &&
-	      break_type == G_UNICODE_BREAK_NUMERIC)
-	    break_op = BREAK_PROHIBITED;
+	  if (prev_prev_LB_type == LB_Numeric &&
+	      prev_break_type == G_UNICODE_BREAK_CLOSE_PUNCTUATION &&
+	      break_type == G_UNICODE_BREAK_PREFIX)
+	    break_op = BREAK_PROHIBITED; /* NU ( SY | IS )* CL × PR */
 
-	  if (prev_break_type == G_UNICODE_BREAK_NUMERIC &&
-	      (break_type == G_UNICODE_BREAK_NUMERIC ||
-	       break_type == G_UNICODE_BREAK_SYMBOL ||
-	       break_type == G_UNICODE_BREAK_INFIX_SEPARATOR))
-	    break_op = BREAK_PROHIBITED;
+	  if (prev_prev_LB_type == LB_Numeric &&
+	      prev_break_type == G_UNICODE_BREAK_CLOSE_PARANTHESIS &&
+	      break_type == G_UNICODE_BREAK_PREFIX)
+	    break_op = BREAK_PROHIBITED; /* NU ( SY | IS )* CP × PR */
 
 	  if (prev_LB_type == LB_Numeric &&
-	      (break_type == G_UNICODE_BREAK_NUMERIC ||
-	       break_type == G_UNICODE_BREAK_SYMBOL ||
-	       break_type == G_UNICODE_BREAK_INFIX_SEPARATOR ||
-	       break_type == G_UNICODE_BREAK_CLOSE_PUNCTUATION ||
-	       break_type == G_UNICODE_BREAK_CLOSE_PARANTHESIS))
-	    break_op = BREAK_PROHIBITED;
+	      break_type == G_UNICODE_BREAK_POSTFIX)
+	    break_op = BREAK_PROHIBITED; /* NU ( SY | IS )* × PO */
 
-	  if ((prev_LB_type == LB_Numeric ||
-	       prev_LB_type == LB_Numeric_Close) &&
-	      (break_type == G_UNICODE_BREAK_POSTFIX ||
-	       break_type == G_UNICODE_BREAK_PREFIX))
-	    break_op = BREAK_PROHIBITED;
+	  if (prev_LB_type == LB_Numeric &&
+	      break_type == G_UNICODE_BREAK_PREFIX)
+	    break_op = BREAK_PROHIBITED; /* NU ( SY | IS )* × PR */
+
+	  if (prev_break_type == G_UNICODE_BREAK_POSTFIX &&
+	      break_type == G_UNICODE_BREAK_OPEN_PUNCTUATION &&
+	      next_break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* PO × OP NU */
+
+	  if (prev_break_type == G_UNICODE_BREAK_POSTFIX &&
+	      break_type == G_UNICODE_BREAK_OPEN_PUNCTUATION &&
+	      next_break_type == G_UNICODE_BREAK_INFIX_SEPARATOR &&
+	      next_next_break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* PO × OP IS NU */
+
+	  if (prev_break_type == G_UNICODE_BREAK_POSTFIX &&
+	      break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* PO × NU */
+
+	  if (prev_break_type == G_UNICODE_BREAK_PREFIX &&
+	      break_type == G_UNICODE_BREAK_OPEN_PUNCTUATION &&
+	      next_break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* PR × OP NU */
+
+	  if (prev_break_type == G_UNICODE_BREAK_PREFIX &&
+	      break_type == G_UNICODE_BREAK_OPEN_PUNCTUATION &&
+	      next_break_type == G_UNICODE_BREAK_INFIX_SEPARATOR &&
+	      next_next_break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* PR × OP IS NU */
+
+	  if (prev_break_type == G_UNICODE_BREAK_PREFIX &&
+	      break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* PR × NU */
+
+	  if (prev_break_type == G_UNICODE_BREAK_HYPHEN &&
+	      break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* HY × NU */
+
+	  if (prev_break_type == G_UNICODE_BREAK_INFIX_SEPARATOR &&
+	      break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* IS × NU */
+
+	  if (prev_LB_type == LB_Numeric &&
+	      break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED; /* NU ( SY | IS )* × NU */
 
 	  /* Rule LB24 */
 	  if ((prev_break_type == G_UNICODE_BREAK_PREFIX ||
@@ -1328,17 +1393,6 @@ default_break (const char    *text,
 	       prev_break_type == G_UNICODE_BREAK_HEBREW_LETTER) &&
 	      (break_type == G_UNICODE_BREAK_PREFIX ||
 	       break_type == G_UNICODE_BREAK_POSTFIX))
-	    break_op = BREAK_PROHIBITED;
-
-	  /* Rule LB23 */
-	  if ((prev_break_type == G_UNICODE_BREAK_ALPHABETIC ||
-	       prev_break_type == G_UNICODE_BREAK_HEBREW_LETTER) &&
-	      break_type == G_UNICODE_BREAK_NUMERIC)
-	    break_op = BREAK_PROHIBITED;
-
-	  if (prev_break_type == G_UNICODE_BREAK_NUMERIC &&
-	      (break_type == G_UNICODE_BREAK_ALPHABETIC ||
-	       break_type == G_UNICODE_BREAK_HEBREW_LETTER))
 	    break_op = BREAK_PROHIBITED;
 
 	  /* Rule LB23a */
@@ -1354,9 +1408,31 @@ default_break (const char    *text,
 	      break_type == G_UNICODE_BREAK_POSTFIX)
 	    break_op = BREAK_PROHIBITED;
 
+	  /* Rule LB23 */
+	  if ((prev_break_type == G_UNICODE_BREAK_ALPHABETIC ||
+	       prev_break_type == G_UNICODE_BREAK_HEBREW_LETTER) &&
+	      break_type == G_UNICODE_BREAK_NUMERIC)
+	    break_op = BREAK_PROHIBITED;
+
+	  if (prev_break_type == G_UNICODE_BREAK_NUMERIC &&
+	      (break_type == G_UNICODE_BREAK_ALPHABETIC ||
+	       break_type == G_UNICODE_BREAK_HEBREW_LETTER))
+	    break_op = BREAK_PROHIBITED;
+
 	  /* Rule LB22 */
 	  if (break_type == G_UNICODE_BREAK_INSEPARABLE)
 	    break_op = BREAK_PROHIBITED;
+
+	  if (prev_break_type == G_UNICODE_BREAK_SYMBOL &&
+	      break_type == G_UNICODE_BREAK_HEBREW_LETTER)
+	    break_op = BREAK_PROHIBITED; /* Rule LB21b */
+
+	  if (prev_prev_break_type == G_UNICODE_BREAK_HEBREW_LETTER &&
+	      (prev_break_type == G_UNICODE_BREAK_HYPHEN ||
+	       (prev_break_type == G_UNICODE_BREAK_AFTER &&
+		!_pango_is_EastAsianWide(prev_wc))) &&
+	      break_type != G_UNICODE_BREAK_HEBREW_LETTER)
+	    break_op = BREAK_PROHIBITED; /* Rule LB21a */
 
 	  if (break_type == G_UNICODE_BREAK_AFTER ||
 	      break_type == G_UNICODE_BREAK_HYPHEN ||
@@ -1364,22 +1440,50 @@ default_break (const char    *text,
 	      prev_break_type == G_UNICODE_BREAK_BEFORE)
 	    break_op = BREAK_PROHIBITED; /* Rule LB21 */
 
-	  if (prev_prev_break_type == G_UNICODE_BREAK_HEBREW_LETTER &&
+	  /* Rule LB20a */
+	  if ((prev_LB_i == 0 ||
+	       prev_prev_break_type == G_UNICODE_BREAK_MANDATORY ||
+	       prev_prev_break_type == G_UNICODE_BREAK_CARRIAGE_RETURN ||
+	       prev_prev_break_type == G_UNICODE_BREAK_LINE_FEED ||
+	       prev_prev_break_type == G_UNICODE_BREAK_NEXT_LINE ||
+	       prev_prev_break_type == G_UNICODE_BREAK_SPACE ||
+	       prev_prev_break_type == G_UNICODE_BREAK_ZERO_WIDTH_SPACE ||
+	       prev_prev_break_type == G_UNICODE_BREAK_CONTINGENT ||
+	       prev_prev_break_type == G_UNICODE_BREAK_NON_BREAKING_GLUE) &&
 	      (prev_break_type == G_UNICODE_BREAK_HYPHEN ||
-	       prev_break_type == G_UNICODE_BREAK_AFTER))
-	    break_op = BREAK_PROHIBITED; /* Rule LB21a */
-
-	  if (prev_break_type == G_UNICODE_BREAK_SYMBOL &&
-	      break_type == G_UNICODE_BREAK_HEBREW_LETTER)
-	    break_op = BREAK_PROHIBITED; /* Rule LB21b */
+	       prev_LB_type == LB_Hyphen) &&
+	       break_type == G_UNICODE_BREAK_ALPHABETIC)
+	     break_op = BREAK_PROHIBITED;
 
 	  if (prev_break_type == G_UNICODE_BREAK_CONTINGENT ||
 	      break_type == G_UNICODE_BREAK_CONTINGENT)
 	    break_op = BREAK_ALLOWED; /* Rule LB20 */
 
-	  if (prev_break_type == G_UNICODE_BREAK_QUOTATION ||
+	  /* Rule LB19a */
+	  if (!_pango_is_EastAsianWide(prev_wc) &&
 	      break_type == G_UNICODE_BREAK_QUOTATION)
-	    break_op = BREAK_PROHIBITED; /* Rule LB19 */
+	    break_op = BREAK_PROHIBITED;
+
+	  if (break_type == G_UNICODE_BREAK_QUOTATION &&
+	      (!_pango_is_EastAsianWide(next_wc) || done))
+	    break_op = BREAK_PROHIBITED;
+
+	  if (prev_break_type == G_UNICODE_BREAK_QUOTATION &&
+	      !_pango_is_EastAsianWide(wc))
+	    break_op = BREAK_PROHIBITED;
+
+	  if ((prev_LB_i == 0 || !_pango_is_EastAsianWide(prev_prev_wc)) &&
+	      prev_break_type == G_UNICODE_BREAK_QUOTATION)
+	    break_op = BREAK_PROHIBITED;
+
+	  /* Rule LB19 */
+	  if (break_type == G_UNICODE_BREAK_QUOTATION &&
+	      type != G_UNICODE_INITIAL_PUNCTUATION)
+	    break_op = BREAK_PROHIBITED;
+
+	  if (prev_break_type == G_UNICODE_BREAK_QUOTATION &&
+	      g_unichar_type(prev_wc) != G_UNICODE_FINAL_PUNCTUATION)
+	    break_op = BREAK_PROHIBITED;
 
 	  /* handle related rules for Space as state machine here,
 	     and override the pair table result. */
@@ -1395,6 +1499,16 @@ default_break (const char    *text,
 	      break_type == G_UNICODE_BREAK_NON_STARTER)
 	    break_op = BREAK_PROHIBITED; /* Rule LB16 */
 
+	  /* Rule LB15d */
+	  if (break_type == G_UNICODE_BREAK_INFIX_SEPARATOR)
+	      break_op = BREAK_PROHIBITED;
+
+	  /* Rule LB15c */
+	  if (prev_break_type == G_UNICODE_BREAK_SPACE &&
+	      break_type == G_UNICODE_BREAK_INFIX_SEPARATOR &&
+	      next_break_type == G_UNICODE_BREAK_NUMERIC)
+	      break_op = BREAK_ALLOWED;
+
 	  /* Rule LB15b */
 	  if (type == G_UNICODE_FINAL_PUNCTUATION &&
 	      break_type == G_UNICODE_BREAK_QUOTATION)
@@ -1405,7 +1519,7 @@ default_break (const char    *text,
 		  next_break_type == G_UNICODE_BREAK_WORD_JOINER ||
 		  next_break_type == G_UNICODE_BREAK_CLOSE_PUNCTUATION ||
 		  next_break_type == G_UNICODE_BREAK_QUOTATION ||
-		  next_break_type == G_UNICODE_BREAK_CLOSE_PARENTHESIS ||
+		  next_break_type == G_UNICODE_BREAK_CLOSE_PARANTHESIS ||
 		  next_break_type == G_UNICODE_BREAK_EXCLAMATION ||
 		  next_break_type == G_UNICODE_BREAK_INFIX_SEPARATOR ||
 		  next_break_type == G_UNICODE_BREAK_SYMBOL ||
@@ -1446,19 +1560,11 @@ default_break (const char    *text,
 	  if (row_break_type == G_UNICODE_BREAK_OPEN_PUNCTUATION)
 	    break_op = BREAK_PROHIBITED; /* Rule LB14 */
 
-	  /* Rule LB13 with Example 7 of Customization */
-	  if (break_type == G_UNICODE_BREAK_EXCLAMATION)
-	    break_op = BREAK_PROHIBITED;
-
-	  if (prev_break_type != G_UNICODE_BREAK_NUMERIC &&
-	      (break_type == G_UNICODE_BREAK_CLOSE_PUNCTUATION ||
-	       break_type == G_UNICODE_BREAK_CLOSE_PARANTHESIS ||
-	       break_type == G_UNICODE_BREAK_INFIX_SEPARATOR ||
-	       break_type == G_UNICODE_BREAK_SYMBOL))
-	    break_op = BREAK_PROHIBITED;
-
-	  if (prev_break_type == G_UNICODE_BREAK_NON_BREAKING_GLUE)
-	    break_op = BREAK_PROHIBITED; /* Rule LB12 */
+	  if (break_type == G_UNICODE_BREAK_CLOSE_PUNCTUATION ||
+	      break_type == G_UNICODE_BREAK_CLOSE_PARANTHESIS ||
+	      break_type == G_UNICODE_BREAK_EXCLAMATION ||
+	      break_type == G_UNICODE_BREAK_SYMBOL)
+	    break_op = BREAK_PROHIBITED; /* Rule LB13 */
 
 	  if (break_type == G_UNICODE_BREAK_NON_BREAKING_GLUE &&
 	      (prev_break_type != G_UNICODE_BREAK_SPACE &&
@@ -1466,10 +1572,12 @@ default_break (const char    *text,
 	       prev_break_type != G_UNICODE_BREAK_HYPHEN))
 	    break_op = BREAK_PROHIBITED; /* Rule LB12a */
 
+	  if (prev_break_type == G_UNICODE_BREAK_NON_BREAKING_GLUE)
+	    break_op = BREAK_PROHIBITED; /* Rule LB12 */
+
 	  if (prev_break_type == G_UNICODE_BREAK_WORD_JOINER ||
 	      break_type == G_UNICODE_BREAK_WORD_JOINER)
 	    break_op = BREAK_PROHIBITED; /* Rule LB11 */
-
 
 	  /* Rule LB9 */
 	  if (break_type == G_UNICODE_BREAK_COMBINING_MARK ||
@@ -1487,11 +1595,11 @@ default_break (const char    *text,
 		break_op = BREAK_PROHIBITED;
 	    }
 
-	  if (row_break_type == G_UNICODE_BREAK_ZERO_WIDTH_SPACE)
-	    break_op = BREAK_ALLOWED; /* Rule LB8 */
-
 	  if (prev_wc == 0x200D)
 	    break_op = BREAK_PROHIBITED; /* Rule LB8a */
+
+	  if (row_break_type == G_UNICODE_BREAK_ZERO_WIDTH_SPACE)
+	    break_op = BREAK_ALLOWED; /* Rule LB8 */
 
 	  if (break_type == G_UNICODE_BREAK_SPACE ||
 	      break_type == G_UNICODE_BREAK_ZERO_WIDTH_SPACE)
@@ -1544,10 +1652,9 @@ default_break (const char    *text,
 	  if (!(break_type == G_UNICODE_BREAK_COMBINING_MARK ||
 		break_type == G_UNICODE_BREAK_ZERO_WIDTH_JOINER))
 	    {
-	      /* Rule LB25 with Example 7 of Customization */
-	      if (break_type == G_UNICODE_BREAK_NUMERIC ||
-		  break_type == G_UNICODE_BREAK_SYMBOL ||
-		  break_type == G_UNICODE_BREAK_INFIX_SEPARATOR)
+	      /* Rule LB25 without Example 7 of Customization */
+	      if (break_type == G_UNICODE_BREAK_SYMBOL ||
+		    break_type == G_UNICODE_BREAK_INFIX_SEPARATOR)
 		{
 		  if (prev_LB_type != LB_Numeric)
 		    {
@@ -1585,6 +1692,7 @@ default_break (const char    *text,
 	    {
 	      prev_prev_break_type = prev_break_type;
 	      prev_break_type = break_type;
+	      prev_LB_i = i;
 	    }
 
 	  prev_jamo = jamo;
@@ -1595,6 +1703,7 @@ default_break (const char    *text,
 	    {
 	      prev_prev_break_type = prev_break_type;
 	      prev_break_type = break_type;
+	      prev_LB_i = i;
 	    }
 	  /* else don't change the prev_break_type */
 	}
@@ -1796,6 +1905,7 @@ default_break (const char    *text,
         prev_space_or_hyphen = space_or_hyphen;
       }
 
+      prev_prev_wc = prev_wc;
       prev_wc = wc;
       prev_script = script;
 
@@ -2322,8 +2432,9 @@ tailor_break (const char    *text,
  * @text: text to break. Must be valid UTF-8
  * @length: length of text in bytes (may be -1 if @text is nul-terminated)
  * @analysis: (nullable): a `PangoAnalysis` structure for the @text
- * @attrs: logical attributes to fill in
- * @attrs_len: size of the array passed as @attrs
+ * @attrs: (array length=attrs_len) (out caller-allocates): logical
+ *   attributes to fill in
+ * @attrs_len: (in): size of the array passed as @attrs
  *
  * This is the default break algorithm.
  *
@@ -2356,8 +2467,9 @@ pango_default_break (const char    *text,
  * @text: the text to process. Must be valid UTF-8
  * @length: length of @text in bytes (may be -1 if @text is nul-terminated)
  * @analysis: `PangoAnalysis` structure for @text
- * @attrs: (array length=attrs_len): an array to store character information in
- * @attrs_len: size of the array passed as @attrs
+ * @attrs: (array length=attrs_len) (out caller-allocates): an array to
+ *   store character information in
+ * @attrs_len: (in): size of the array passed as @attrs
  *
  * Determines possible line, word, and character breaks
  * for a string of Unicode text with a single analysis.
@@ -2388,9 +2500,9 @@ pango_break (const char    *text,
  * @analysis: `PangoAnalysis` for @text
  * @offset: Byte offset of @text from the beginning of the
  *   paragraph, or -1 to ignore attributes from @analysis
- * @attrs: (array length=attrs_len): array with one `PangoLogAttr`
- *   per character in @text, plus one extra, to be filled in
- * @attrs_len: length of @attrs array
+ * @attrs: (array length=attrs_len) (out caller-allocates): array with one
+ *   `PangoLogAttr` per character in @text, plus one extra, to be filled in
+ * @attrs_len: (in): length of @attrs array
  *
  * Apply language-specific tailoring to the breaks in @attrs.
  *
@@ -2435,9 +2547,9 @@ pango_tailor_break (const char    *text,
  * @length: length of text in bytes (may be -1 if @text is nul-terminated)
  * @attr_list: `PangoAttrList` to apply
  * @offset: Byte offset of @text from the beginning of the paragraph
- * @attrs: (array length=attrs_len): array with one `PangoLogAttr`
- *   per character in @text, plus one extra, to be filled in
- * @attrs_len: length of @attrs array
+ * @attrs: (array length=attrs_len) (out caller-allocates): array with one
+ *   `PangoLogAttr` per character in @text, plus one extra, to be filled in
+ * @attrs_len: (in): length of @attrs array
  *
  * Apply customization from attributes to the breaks in @attrs.
  *
@@ -2481,9 +2593,9 @@ pango_attr_break (const char    *text,
  * @length: length in bytes of @text
  * @level: embedding level, or -1 if unknown
  * @language: language tag
- * @attrs: (array length=attrs_len): array with one `PangoLogAttr`
- *   per character in @text, plus one extra, to be filled in
- * @attrs_len: length of @attrs array
+ * @attrs: (array length=attrs_len) (out caller-allocates): array with one
+ *   `PangoLogAttr` per character in @text, plus one extra, to be filled in
+ * @attrs_len: (in): length of @attrs array
  *
  * Computes a `PangoLogAttr` for each character in @text.
  *

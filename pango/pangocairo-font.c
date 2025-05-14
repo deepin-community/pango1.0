@@ -161,6 +161,20 @@ pango_cairo_font_get_scaled_font (PangoCairoFont *cfont)
   return _pango_cairo_font_private_get_scaled_font (cf_priv);
 }
 
+void
+pango_cairo_font_get_font_options (PangoCairoFont       *cfont,
+                                   cairo_font_options_t *options)
+{
+  PangoCairoFontPrivate *cf_priv;
+
+  if (G_UNLIKELY (!cfont))
+    return;
+
+  cf_priv = PANGO_CAIRO_FONT_PRIVATE (cfont);
+
+  pango_cairo_font_private_get_font_options (cf_priv, options);
+}
+
 /**
  * _pango_cairo_font_install:
  * @font: a `PangoCairoFont`
@@ -635,6 +649,15 @@ _pango_cairo_font_private_is_metrics_hinted (PangoCairoFontPrivate *cf_priv)
   return cf_priv->is_hinted;
 }
 
+void
+pango_cairo_font_private_get_font_options (PangoCairoFontPrivate *cf_priv,
+                                           cairo_font_options_t  *options)
+{
+  if (cf_priv->scaled_font)
+    cairo_scaled_font_get_font_options (cf_priv->scaled_font, options);
+  else if (cf_priv->data)
+    cairo_font_options_merge (options, cf_priv->data->options);
+}
 
 static void
 get_space_extents (PangoCairoFontPrivate *cf_priv,

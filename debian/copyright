@@ -3,7 +3,6 @@ Upstream-Name: pango
 Source: https://download.gnome.org/sources/pango/
 Files-Excluded:
  docs/Pango*
- subprojects/gi-docgen
 
 Files: *
 Copyright: 1999-2019  Red Hat
@@ -116,7 +115,7 @@ License: Apache-2
  Licensed under the Apache License, Version 2.0 (the "License");
  you may not use this file except in compliance with the License.
  You may obtain a copy of the License at
- . 
+ .
        http://www.apache.org/licenses/LICENSE-2.0
  .
  Unless required by applicable law or agreed to in writing, software
@@ -125,7 +124,7 @@ License: Apache-2
  See the License for the specific language governing permissions and
  limitations under the License.
  .
- On Debian systems, the complete text of the Apache License Version 2.0 
+ On Debian systems, the complete text of the Apache License Version 2.0
  can be found in `/usr/share/common-licenses/Apache-2.0'.
 
 License: Bitstream-Vera

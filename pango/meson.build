@@ -129,15 +129,12 @@ libpango = library(
 
 pango_dep_sources = [pango_enum_h]
 
-gir = find_program('g-ir-scanner', required : get_option('introspection'))
-build_gir = gir.found() and (not meson.is_cross_build() or get_option('introspection').enabled())
-
 if build_gir
   gir_args = [
     '--quiet',
   ]
   harfbuzz_gobject_dep = dependency('harfbuzz-gobject',
-                                    version: harfbuzz_req_version,
+                                    version: harfbuzz_req,
                                     required: false,
                                     fallback: ['harfbuzz', 'libharfbuzz_gobject_dep'])
 
@@ -423,7 +420,6 @@ if host_system == 'windows'
     'pangowin32-fontcache.c',
     'pangowin32-fontmap.c',
     'pangowin32-dwrite-fontmap.cpp',
-    'pangowin32-dwrite-utils-legacy.cpp',
   ]
 
   pangowin32_deps = pango_deps + [

@@ -1,3 +1,86 @@
+pango1.0 (1.56.3-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 17 Mar 2025 14:38:37 -0400
+
+pango1.0 (1.56.2-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 13 Mar 2025 11:33:37 -0400
+
+pango1.0 (1.56.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove 3 patches applied in new release
+  * Remove now unnecessary Build-Conflicts: fonts-cantarell
+  * autopkgtest: Add Depends: fonts-cantarell as a way to test
+    the underlying issue
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 19 Jan 2025 10:08:35 -0500
+
+pango1.0 (1.56.0-3) unstable; urgency=medium
+
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 14 Jan 2025 04:00:17 -0500
+
+pango1.0 (1.56.0-2) experimental; urgency=medium
+
+  * Cherry-pick build system improvements
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 13 Jan 2025 08:47:53 -0500
+
+pango1.0 (1.56.0-1) experimental; urgency=medium
+
+  * New upstream release
+  * Bump minimum glib and cairo
+  * Update Build-Depends: help2man -> python3-docutils
+  * debian/libpango*.symbols: Add new symbols
+  * Opt into Salsa CI
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 09 Jan 2025 12:52:04 -0900
+
+pango1.0 (1.55.0+ds-3) unstable; urgency=medium
+
+  * Release to unstable
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 03 Dec 2024 14:04:40 -0500
+
+pango1.0 (1.55.0+ds-2) experimental; urgency=medium
+
+  * New upstream release
+  * Remove fonts-cantarell from Build-Depends and Depends
+  * Add Build-Conflicts: fonts-cantarell (issue was reported upstream)
+  * Bump minimum fontconfig, harfbuzz, and meson
+  * debian/libpango-1.0-0.symbols: Add new symbol
+  * Remove 2 workaround patches that are no longer needed
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 02 Dec 2024 12:38:25 -0500
+
+pango1.0 (1.54.0+ds-3) unstable; urgency=medium
+
+  * Depend on gir1.2-harfbuzz-0.0-dev
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 17 Oct 2024 13:13:52 -0400
+
+pango1.0 (1.54.0+ds-2) unstable; urgency=medium
+
+  * Enable sysprof profiling integration on available architectures
+    (LP: #2077465)
+  * Bump Standards Version to 4.7.0
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Tue, 20 Aug 2024 16:56:39 -0400
+
+pango1.0 (1.54.0+ds-1) unstable; urgency=medium
+
+  * New upstream release
+  * debian/libpango-1.0-0.symbols: Add new symbol
+  * Add patch to revert dropping installed tests uses by autopkgtests
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 10 Jun 2024 09:19:21 -0400
+
 pango1.0 (1.52.2+ds-1) unstable; urgency=medium
 
   * New upstream release
