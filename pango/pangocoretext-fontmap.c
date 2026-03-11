@@ -267,7 +267,7 @@ ct_font_descriptor_get_traits (CTFontDescriptorRef desc)
    */
   dict = CTFontDescriptorCopyAttribute (desc, kCTFontTraitsAttribute);
   cf_number = (CFNumberRef)CFDictionaryGetValue (dict, kCTFontSymbolicTrait);
-  if (!CFNumberGetValue (cf_number, kCFNumberSInt64Type, &traits))
+  if (!(cf_number && CFNumberGetValue (cf_number, kCFNumberSInt64Type, &traits)))
     traits = 0;
   CFRelease (dict);
 
@@ -1017,6 +1017,7 @@ struct _PangoCoreTextFontKey
   double resolution;
   gboolean synthetic_italic;
   gpointer context_key;
+  char *variations;
 };
 
 static void
@@ -1034,6 +1035,7 @@ pango_core_text_font_key_init (PangoCoreTextFontKey    *key,
   key->synthetic_italic = synthetic_italic;
   key->gravity = pango_core_text_fontset_key_get_gravity (fontset_key);
   key->context_key = pango_core_text_fontset_key_get_context_key (fontset_key);
+  key->variations = (char *) pango_font_description_get_variations (fontset_key->desc);
 }
 
 static void
@@ -1048,6 +1050,7 @@ pango_core_text_font_key_init_from_key (PangoCoreTextFontKey       *key,
   key->synthetic_italic = orig->synthetic_italic;
   key->gravity = orig->gravity;
   key->context_key = orig->context_key;
+  key->variations = orig->variations;
 }
 
 static PangoCoreTextFontKey *
@@ -1067,6 +1070,7 @@ pango_core_text_font_key_copy (const PangoCoreTextFontKey *old)
     key->context_key = PANGO_CORE_TEXT_FONT_MAP_GET_CLASS (key->fontmap)->context_key_copy (key->fontmap, old->context_key);
   else
     key->context_key = NULL;
+  key->variations = g_strdup (old->variations);
 
   return key;
 }
@@ -1079,6 +1083,8 @@ pango_core_text_font_key_free (PangoCoreTextFontKey *key)
 
   if (key->context_key)
     PANGO_CORE_TEXT_FONT_MAP_GET_CLASS (key->fontmap)->context_key_free (key->fontmap, key->context_key);
+
+  g_free (key->variations);
 
   g_slice_free (PangoCoreTextFontKey, key);
 }
@@ -1095,6 +1101,9 @@ pango_core_text_font_key_hash (const PangoCoreTextFontKey *key)
   if (key->context_key)
     hash ^= PANGO_CORE_TEXT_FONT_MAP_GET_CLASS (key->fontmap)->context_key_hash (key->fontmap, key->context_key);
 
+  if (key->variations)
+    hash ^= g_str_hash (key->variations);
+
   return (hash ^ CFHash (key->ctfontdescriptor));
 }
 
@@ -1107,7 +1116,8 @@ pango_core_text_font_key_equal (const PangoCoreTextFontKey *key_a,
       key_a->gravity == key_b->gravity &&
       key_a->pointsize == key_b->pointsize &&
       key_a->resolution == key_b->resolution &&
-      key_a->synthetic_italic == key_b->synthetic_italic)
+      key_a->synthetic_italic == key_b->synthetic_italic &&
+      g_strcmp0 (key_a->variations, key_b->variations) == 0)
     {
       if (key_a->context_key && key_b->context_key)
         return PANGO_CORE_TEXT_FONT_MAP_GET_CLASS (key_a->fontmap)->context_key_equal (key_a->fontmap,
@@ -1162,6 +1172,11 @@ pango_core_text_font_key_get_ctfontdescriptor (const PangoCoreTextFontKey *key)
   return key->ctfontdescriptor;
 }
 
+const char *
+pango_core_text_font_key_get_variations (const PangoCoreTextFontKey *key)
+{
+  return key->variations;
+}
 
 
 static void
@@ -1538,6 +1553,15 @@ pango_core_text_font_map_init (PangoCoreTextFontMap *ctfontmap)
     g_hash_table_insert (ctfontmap->families,
                          g_utf8_casefold (family->family_name, -1), family);
   }
+  /* Insert .AppleSystemUIFont because it isn't included in the result
+   * set from CTFontCollectionCreateFromAvailableFonts. If it's not
+   * included in the families fontset it can't be used to render text.
+   */
+  family = g_object_new (PANGO_TYPE_CORE_TEXT_FAMILY, NULL);
+  family->family_name = g_strdup (".AppleSystemUIFont");
+    g_hash_table_insert (ctfontmap->families,
+                         g_utf8_casefold (family->family_name, -1), family);
+
 }
 
 static PangoFontFace *
