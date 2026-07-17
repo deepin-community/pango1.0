@@ -1,3 +1,25 @@
+pango1.0 (1.56.3-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Mon, 17 Mar 2025 14:38:37 -0400
+
+pango1.0 (1.56.2-1) unstable; urgency=medium
+
+  * New upstream release
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Thu, 13 Mar 2025 11:33:37 -0400
+
+pango1.0 (1.56.1-1) unstable; urgency=medium
+
+  * New upstream release
+  * Remove 3 patches applied in new release
+  * Remove now unnecessary Build-Conflicts: fonts-cantarell
+  * autopkgtest: Add Depends: fonts-cantarell as a way to test
+    the underlying issue
+
+ -- Jeremy Bícha <jbicha@ubuntu.com>  Sun, 19 Jan 2025 10:08:35 -0500
+
 pango1.0 (1.56.0-3) unstable; urgency=medium
 
   * Release to unstable

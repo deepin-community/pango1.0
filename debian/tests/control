@@ -4,6 +4,7 @@ Restrictions: superficial
 
 Tests: installed-tests
 Depends: dbus (>= 1.8),
+         fonts-cantarell,
          gnome-desktop-testing,
          locales | locales-all,
          pango1.0-tests,
