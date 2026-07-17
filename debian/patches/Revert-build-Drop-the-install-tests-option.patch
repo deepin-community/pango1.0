@@ -14,17 +14,17 @@ Closes: https://gitlab.gnome.org/GNOME/pango/-/issues/799
  create mode 100755 tests/gen-installed-test.py
 
 diff --git a/meson.build b/meson.build
-index daad554..b6bddf9 100644
+index 9cd9026..8e8a693 100644
 --- a/meson.build
 +++ b/meson.build
-@@ -578,6 +578,7 @@ summary('Introspection', gir.found(), section: 'Build')
+@@ -582,6 +582,7 @@ summary('Introspection', build_gir, section: 'Build')
  summary('Documentation', get_option('documentation'), section: 'Build')
- summary('Build Testsuite', get_option('build-testsuite'), section: 'Build')
- summary('Build Examples', get_option('build-examples'), section: 'Build')
+ summary('Man pages', get_option('man-pages'), section: 'Build')
+ summary('Tests', get_option('build-testsuite'), section: 'Build')
 +summary('Install tests', get_option('install-tests'), section: 'Build')
+ summary('Examples', get_option('build-examples'), section: 'Build')
  
  summary('prefix', pango_prefix, section: 'Directories')
- summary('includedir', pango_includedir, section: 'Directories')
 diff --git a/meson.options b/meson.options
 index 85a268d..2f31c2e 100644
 --- a/meson.options

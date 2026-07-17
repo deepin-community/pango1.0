@@ -36,8 +36,6 @@ Build-Depends: debhelper-compat (= 13),
                pkgconf,
                python3-docutils <!nodoc>
 Build-Depends-Indep: gi-docgen <!nodoc>
-# https://gitlab.gnome.org/GNOME/pango/-/issues/831
-Build-Conflicts: fonts-cantarell <!nocheck>
 Standards-Version: 4.7.0
 Vcs-Browser: https://salsa.debian.org/gnome-team/pango
 Vcs-Git: https://salsa.debian.org/gnome-team/pango.git
