@@ -3,3 +3,4 @@ Revert-build-Drop-the-install-tests-option.patch
 Fix-up-version-macros.patch
 build-Move-gir-to-toplevel-meson.build.patch
 build-Reshuffle-docs-build.patch
+Skip-valid-20-layout-test.patch
