@@ -1,3 +1,9 @@
+pango1.0 (1.56.0-3deepin1) unstable; urgency=medium
+
+  * Skip valid-20.layout test.
+
+ -- Tianyu Chen <sweetyfish@deepin.org>  Thu, 12 Nov 2026 17:06:28 +0800
+
 pango1.0 (1.56.0-3) unstable; urgency=medium
 
   * Release to unstable
